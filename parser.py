@@ -1,53 +1,51 @@
 import requests
 from bs4 import BeautifulSoup
-
+import os
 def get_random_wikipedia_article(language="en", save_to_file=False, extract_image=True):
-    url = f"https://{language}.wikipedia.org/wiki/Special:Random"
-    #Получаем html код
-    response = requests.get(url)
-    html = response.content
-    #Парсим html код
-    soup = BeautifulSoup(response.text, "html.parser")
-    #Находимаем заголвок страницы
-    title = soup.find("h1").text.strip()
-    #Находим первый параграф
-    descriprtion = soup.find("p").text.strip()
+    try:
+        with requests.get(f"https://{language}.wikipedia.org/wiki/Special:Random") as response:
+            soup = BeautifulSoup(response.content, "html.parser")
 
-    #Формируем ссылку на статью
-    full_article_url = response.url
+        arcticle = {
+            "title": soup.find("h1").text.strip(),
+            "description": soup.find("p").text.strip(),
+            "link": response.url,
+            "image": ("https:" + soup.find("img")["src"]) if extract_image and soup.find("img") else "No image"
+        }
+        if extract_image:
+            arcticle["image"] = save_image(soup.find("img"), arcticle["title"]) if soup.find("img") else "No image"
+        if save_to_file:
+            save_article(arcticle)
 
-    arcticle = {
-        "title": title,
-        "description": descriprtion,
-        "link": full_article_url
-    }
-
-    if extract_image:
-        image = soup.find("img")["src"]
-        if image:
-            arcticle["image"] = "https:" + image
-        else:
-            arcticle["image"] = "No image"
-
-    if save_to_file:
-        save_article(arcticle)
-
-    return arcticle
+        return arcticle
+    except requests.RequestException as e:
+        print(f"Error: {e}")
 
 def save_article(arcticle):
     with open("saved_articles.txt", "a", encoding="utf-8") as file:
-        file.write(f"Title: {arcticle['title']}\n")
-        file.write(f"Description: {arcticle['description']}\n")
-        file.write(f"Link: {arcticle['link']}\n")
-        if "image" in arcticle:
-            file.write(f"Image: {arcticle['image']}\n")
-        file.write("\n-------------------------------------------------\n")
+        for key, value in arcticle.items():
+            file.write(f"{key.capitalize()}: {value}\n")
+       
+        file.write(f"\n{'-' * 36}\n")
 
-random_article = get_random_wikipedia_article(language="ru", extract_image=True, save_to_file=True)
-print(f"Title: {random_article['title']}")
-print(f"Description: {random_article['description']}")
-print(f"Link: {random_article['link']}")
-if "image" in random_article:
-    print(f"Image: {random_article['image']}")
+def save_image(image_tag, title):
+    image_url = "https:" + image_tag["src"]
+    image_name = title.replace(" ", "_") + ".jpg"
+    try:
+        response = requests.get(image_url)
+        if response.status_code == 200:
+            with open(image_name, "wb") as file:
+                file.write(response.content)
+            return image_url
+
+    except requests.RequestException as e:
+        print(f"Error: {e}")
+        return "Error"
+if __name__ == "__main__":
+    random_article = get_random_wikipedia_article(language="ru", extract_image=True, save_to_file=True)
+    if random_article:
+        for key, value in random_article.items():
+            print(f"{key.capitalize()}: {value}")
+
 
 
